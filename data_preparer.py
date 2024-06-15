@@ -91,6 +91,7 @@ class DataPreparer:
 
         for s_id, snapshot in enumerate(combination_snapshots):
             communities = snapshot.community_infomap(edge_weights="weight", trials=30)
+
             # communities = snapshot.community_multilevel(weights='weight')
             # print("Community Modularity:", communities.modularity)
 
