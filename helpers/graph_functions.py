@@ -1,21 +1,18 @@
 import networkx as nx
 import numpy as np
 import warnings
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 warnings.filterwarnings("ignore")
 
 
-def build_graph(similarities, col_list, textual_similarities, stock2id, threshold_metric="mean", add_text_sim=True,
-                ts_w=0.55, text_w=0.45):
+def build_graph(similarities, col_list, textual_similarities, stock2id, threshold_metric="mean",
+                ts_w=0.55, text_w=0.45, threshold=None):
     graph1 = nx.Graph()
     graph1.add_nodes_from(col_list)
 
     for edge in list(similarities.keys()):
-        if edge[0] not in list(stock2id.T.columns) or edge[1] not in list(stock2id.T.columns):
-            # print("Not found")
-            continue
-
-        # time-series için distance hesapladık, bunu da distance'a çeviriyoruz
+        # time-series için distance hesapladık, text için similarity hesapladık. Bunu da distance'a çeviriyoruz
         try:
             text_dist = 1 - textual_similarities[stock2id.loc[edge[0]].item()][
                 stock2id.loc[edge[1]].item()]
@@ -27,28 +24,33 @@ def build_graph(similarities, col_list, textual_similarities, stock2id, threshol
 
         ts_dist = similarities[edge]
 
-        if add_text_sim:
-            graph1.add_edge(
+        graph1.add_edge(
                 edge[0], edge[1], weight=(ts_w * ts_dist + text_w * text_dist)
             )
-        else:
-            graph1.add_edge(
-                edge[0], edge[1], weight=(ts_dist)
-            )
 
-    edge_weights = [graph1[edge[0]][edge[1]]['weight'] for edge in graph1.edges()]
+    # remove self loops
+    graph1.remove_edges_from(nx.selfloop_edges(graph1))
+    edge_weights = [graph1[edge[0]][edge[1]]['weight'] for edge in graph1.edges(data=True)]
 
-    if threshold_metric == "mean":
-        threshold = np.mean(edge_weights)
-    elif threshold_metric == "median":
-        threshold = np.median(edge_weights)
-    elif threshold_metric == "1_sigma":
-        std = np.std(edge_weights)
-        print("std", std)
-        threshold = np.mean(edge_weights) + std
-    elif threshold_metric == "custom":
-        std = np.std(edge_weights)
-        threshold = np.mean(edge_weights) - (1.5 * std)
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    normalized_weights = scaler.fit_transform(np.array(edge_weights).reshape(-1, 1)).flatten()
+
+    for (i, (u, v)) in enumerate(graph1.edges()):
+        graph1[u][v]['weight'] = normalized_weights[i]
+
+    edge_weights = [graph1[edge[0]][edge[1]]['weight'] for edge in graph1.edges(data=True)]
+    std = np.std(edge_weights)
+
+    if threshold is None:
+        if threshold_metric == "mean":
+            threshold = np.mean(edge_weights)
+        elif threshold_metric == "1_sigma":
+            threshold = np.mean(edge_weights) - (1.0 * std)
+        elif threshold_metric == "1_25_sigma":
+            threshold = np.mean(edge_weights) - (1.25 * std)
+        elif threshold_metric == "1_5_sigma" or threshold_metric == "custom":
+            threshold = np.mean(edge_weights) - (1.5 * std)
+            # print("threshold:", threshold, "mean:", np.mean(edge_weights), "std:", std)
 
     filtered_graph = nx.Graph()
     filtered_graph.add_nodes_from(col_list)

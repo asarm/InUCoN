@@ -37,7 +37,7 @@ class DataPreparer:
     def get_historical_ts_similarities(self):
         return self.ts_similarities
 
-    def prepare_snapshots(self, weight_combination={"ts": 0.55, "tx": 0.45}):
+    def prepare_snapshots(self, weight_combination={"ts": 0.55, "tx": 0.45}, threshold=None, threshold_metric="1_5_sigma"):
         if self.ts_similarities is None:
             print("Calculating TS similarities")
             self.calculate_historical_ts_similarities()
@@ -52,14 +52,11 @@ class DataPreparer:
                 textual_similarities=self.text_similarity_matrix,
                 stock2id=self.stock2id,
                 col_list=list(self.stockData.columns),
-                threshold_metric="custom",
-                add_text_sim=True,
+                threshold_metric=threshold_metric,
+                threshold=threshold,
                 ts_w=ts_weight,
                 text_w=textual_weight
             )
-
-            # Remove self-loops in the NetworkX graph
-            nx_snapshot.remove_edges_from(nx.selfloop_edges(nx_snapshot))
 
             # Convert NetworkX graph to igraph
             ig_snapshot = ig.Graph(directed=nx_snapshot.is_directed())
