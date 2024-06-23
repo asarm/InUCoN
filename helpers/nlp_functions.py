@@ -1,11 +1,7 @@
 import pandas as pd
-import numpy as np
-
 from transformers import DistilBertModel, DistilBertTokenizer
 import torch
-
 import pickle
-import json
 from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 

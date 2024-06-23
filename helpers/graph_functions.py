@@ -1,7 +1,7 @@
 import networkx as nx
 import numpy as np
 import warnings
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler
 
 warnings.filterwarnings("ignore")
 

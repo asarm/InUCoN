@@ -1,9 +1,6 @@
-import os
-
 import yfinance as yf
 import pandas as pd
 from tqdm import tqdm
-
 
 def stockListFromURL(market="usa"):
     if market == "usa":
