@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import networkx as nx
 
 from helpers.time_series_functions import calculate_historical_ts_similarities
 from helpers import graph_functions, data_preparation, nlp_functions
