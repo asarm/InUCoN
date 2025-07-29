@@ -181,29 +181,34 @@ class Allocator:
         lookback_dt = dt - relativedelta(months=self.lookback_months)
         return lookback_dt.strftime('%Y-%m-%d')
 
-    def calculate_rebalanced_returns(self, stockData, startDate, initial_investment=100000):
+    def calculate_rebalanced_returns(self, stockData, startDate, rebalance_dates, initial_investment=100000):
         """
-        Calculate portfolio returns with periodic rebalancing using 6-month lookback window
+        Calculate portfolio returns with rebalancing on specific dates.
         
         Args:
             stockData (pd.DataFrame): Historical price data for all assets
             startDate (str): Start date in 'YYYY-MM-DD' format
+            rebalance_dates (list): List of specific rebalancing dates in 'YYYY-MM-DD' format
             initial_investment (float): Initial investment amount
         """
         portfolio_value = initial_investment
         cumulative_returns = []
         weights_history = []
         current_weights = None
-        rebalance_dates = []
+        rebalance_dates_actual = []
 
+        # Ensure that the stockData is filtered correctly
         filtered_data = stockData[stockData.index > startDate]
-        
-        for i in range(len(filtered_data)):
-            current_date = filtered_data.index[i]
-            current_date_str = current_date if isinstance(current_date, str) else current_date.strftime('%Y-%m-%d')
-            
-            # Rebalance on day 1 and every rebalancing_period days
-            if i == 0 or i % self.rebalancing_period == 0:
+
+        # Ensure that rebalance_dates are in string format
+        rebalance_dates = [str(date) for date in rebalance_dates]
+
+        for current_date in filtered_data.index:
+            # Ensure current_date is a string (convert if necessary)
+            current_date_str = str(current_date)
+
+            # If the current date matches one of the rebalance dates
+            if current_date_str in rebalance_dates:
                 # Calculate the start of the lookback window
                 lookback_start = self._get_lookback_date(current_date_str)
                 
@@ -219,17 +224,21 @@ class Allocator:
                         raise ValueError("Not enough historical data for initial optimization")
                     continue
                 
-                rebalance_dates.append(current_date_str)
+                rebalance_dates_actual.append(current_date_str)
                 new_weights = self.mean_variance_optimization(historical_data, min_weight=0.01)
                 current_weights = new_weights
                 weights_history.append((current_date_str, new_weights))
             
-            # Calculate daily returns
-            daily_returns = filtered_data.pct_change().iloc[i]
-            portfolio_return = np.sum(daily_returns * current_weights['weights'])
-            portfolio_value *= (1 + portfolio_return)
-            cumulative_returns.append(portfolio_value)
-        
+            # If current_weights is None, we need to skip return calculation
+            if current_weights is None:
+                cumulative_returns.append(None)  # Add None for this date to maintain alignment
+            else:
+                # Calculate daily returns based on the filtered data
+                daily_returns = filtered_data.pct_change().loc[current_date_str]  # Use current_date_str as index
+                portfolio_return = np.sum(daily_returns * current_weights['weights'])
+                portfolio_value *= (1 + portfolio_return)
+                cumulative_returns.append(portfolio_value)
+
         # Convert weights history to DataFrame
         weights_df = pd.DataFrame(
             [w[1]['weights'].to_dict() for w in weights_history],
@@ -237,9 +246,12 @@ class Allocator:
         )
         
         final_return = (portfolio_value - initial_investment) / initial_investment
-        cumulative_returns = pd.Series(cumulative_returns, index=filtered_data.index)
         
-        return final_return, cumulative_returns, weights_df, rebalance_dates
+        # Handle None values for dates with no returns calculated
+        cumulative_returns = pd.Series(cumulative_returns, index=filtered_data.index)
+        cumulative_returns.fillna(method='ffill', inplace=True)  # Forward fill to propagate previous values
+
+        return final_return, cumulative_returns, weights_df, rebalance_dates_actual
 
     def get_latest_weights(self, stockData, current_date=None):
         """
@@ -264,3 +276,4 @@ class Allocator:
             raise ValueError("Not enough historical data for optimization")
             
         return self.mean_variance_optimization(historical_data, min_weight=0.01)
+    
